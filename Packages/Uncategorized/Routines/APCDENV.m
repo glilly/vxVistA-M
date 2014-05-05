@@ -1,0 +1,77 @@
+APCDENV ; IHS/CMI/TUCSON - ENTER NON-VISIT DATA ; [ 03/05/04  12:57 PM ]
+ ;;2.0;IHS RPMS/PCC Data Entry;**7**;MAR 09, 1999
+ ;
+ ; APCDFLG=0 ... RUN
+ ; APCDFLG=1 ... ERROR
+ ;
+ ; APCDMODE=A ... ADD
+ ; APCDMODE=M ... MOD
+HDR ; Write Header
+ W:$D(IOF) @IOF
+ F APCDJ=1:1:7 S APCDX=$P($T(TEXT+APCDJ),";;",2) W !?80-$L(APCDX)\2,APCDX
+ K APCDX,APCDJ
+ W !!
+ ;
+ D ^APCDEIN
+ Q:APCDFLG
+ S APCDPAT="",APCDENV=1
+ F APCDL=0:0 S APCDPAT="" D GETPAT Q:APCDPAT=""  F APCDL=0:0 S APCDLOC="" D GETLOC Q:APCDLOC=""  F APCDL=0:0 S APCDDATE="" D GETDATE Q:APCDDATE=""  F APCDL=0:0 D PROCESS Q:APCDEMF
+ D EOJ
+ Q
+ ;
+GETPAT ; GET PATIENT
+ I APCDPAT S DIE="^AUPNPAT(",DR=".16///TODAY",DA=APCDPAT D ^DIE
+ W !
+ S APCDPAT=""
+ S DIC="^AUPNPAT(",DIC(0)="AEMQ" D ^DIC K DIC
+ Q:Y<0
+ S APCDPAT=+Y
+ Q
+ ;
+GETLOC ; GET LOCATION
+ S APCDLOC="" S DIC="^AUTTLOC(",DIC(0)="AEMQ" D ^DIC K DIC
+ Q:Y<0
+ S APCDLOC=+Y
+ Q
+ ;
+GETDATE ; GET DATE
+ S APCDDATE="",%DT="AEPX",%DT("A")="Enter Date Information Was Collected: " D ^%DT
+ Q:Y<0
+ S APCDDATE=+Y
+ I AUPNDOB]"" S X2=AUPNDOB,X1=APCDDATE D ^%DTC S AUPNDAYS=X ; re-set days of age to visit date-dob
+ Q
+ ;
+ ;
+PROCESS ; PROCESS MNEMONIC
+ W !!,"Select non VISIT related mnemonics only!"
+ D GETMNE
+ K DIU,DIV S DIE="^AUPNPAT(",DR=".16///TODAY",DA=APCDPAT D ^DIE K DIV,DIU
+ S APCDEMF=1
+ Q
+ ;
+GETMNE ; GET MNEMONIC
+ W !
+ S DIC="^APCDTKW(",DIC(0)="AEMQ",DIC("A")="MNEMONIC: ",DIC("S")="I $L($P(^(0),U))<5,'$P(^(0),U,8)" D ^DIC K DIC("A"),DIC("S")
+ G:Y<0 GETMNEK
+ S APCDMNE=+Y,APCDMNE("NAME")=$P(Y,U,2)
+ D ^APCDEA3
+ G GETMNE
+ ;
+ ;
+GETMNEK ; KILL GETMNE SPECIFIC VARIABLES
+ K APCDVSIT,APCDX
+ Q
+ ;
+EOJ ; END OF JOB
+ D ^APCDEKL
+ K APCDENV
+ K %DT,%W,%A,C,DI,DIG,DIH,DIPGM,DIW
+ Q
+TEXT ;
+ ;;
+ ;;PCC Data Entry Module
+ ;;
+ ;;*******************************
+ ;;*   Entry of NON-VISIT Data   *
+ ;;*******************************
+ ;;

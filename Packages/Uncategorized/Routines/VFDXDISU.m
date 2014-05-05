@@ -1,0 +1,42 @@
+VFDXDISU ;DSS/LM - Disable/enable users by DIVISION ; 5/23/07 10:49am
+ ;;2009.2;DSS,INC VXVISTA OPEN SOURCE;;01 Dec 2009
+ ;Copyright 1995-2009,Document Storage Systems Inc. All Rights Reserved
+ ;
+ Q
+DSS() ;;Return INSTITUTION internal entry number for DSS
+ ;
+ Q $$FIND1^DIC(4,,"X","DOCUMENT STORAGE SYSTEMS, INC","B")
+ ;
+LIST(VFDLIST,VFDINST) ;;Return list of user IENs for INSTITUTION
+ ; VFDLIST=Return by reference (1)=IEN1, (2)=IEN2, etc.
+ ; VFDINST=INSTITUTION IEN (Default=DSS)
+ ;
+ S VFDINST=$G(VFDINST,$$DSS)
+ N VFDISLST D FIND^DIC(200,,"@","QX",VFDINST,,"AH",,,$NA(VFDISLST))
+ N VFDI,VFDR S VFDR=$NA(VFDISLST("DILIST",2))
+ F VFDI=1:1 Q:'$D(@VFDR@(VFDI))  S VFDLIST(VFDI)=@VFDR@(VFDI)
+ Q
+DISABLE(VFDINST) ;;Disable users for INSTITUTION
+ ; VFDINST=INSTITUTION IEN (Default=DSS)
+ D ENDS(.VFDINST,1)
+ Q
+ENABLE(VFDINST) ;;Enable users for INSTITUTION
+ ; VFDINST=INSTITUTION IEN (Default=DSS)
+ D ENDS(.VFDINST,0)
+ Q
+ENDS(VFDINST,VFDFLAG) ;;Enable or disable users for INSTITUTION
+ ; VFDINST=INSTUTION IEN (Default=DSS)
+ ; VFDFLAG[Required] =0 ENABLE or =1 DISABLE (required)
+ ;
+ Q:'"^0^1^"[("^"_$G(VFDFLAG)_"^")
+ N VFDLIST D LIST(.VFDLIST,.VFDINST)
+ N VFDFDA,VFDI,VFDR S VFDR=$NA(VFDFDA(200))
+ F VFDI=1:1 Q:'$D(VFDLIST(VFDI))  S @VFDR@(VFDLIST(VFDI)_",",7)=$S(VFDFLAG:1,1:"@")
+ D:$D(VFDFDA) FILE^DIE(,$NA(VFDFDA))
+ Q
+EN ;;Main interactive entry (from option VFD ENABLE/DISABLE DSS)
+ ;
+ N DIR,X,Y
+ S DIR(0)="S^1:ENABLE;2:DISABLE",DIR("A")="Enable or Disable DSS Users?" D ^DIR Q:$D(DIRUT)
+ D ENDS(,$S(Y=1:0,Y=2:1,1:""))
+ Q

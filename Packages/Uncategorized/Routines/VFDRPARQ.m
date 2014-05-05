@@ -1,0 +1,213 @@
+VFDRPARQ ;DSS/LM - ARRA Export Data ; May 05, 2011 20:20
+ ;;2011.1.2;DSS,INC VXVISTA OPEN SOURCE;;28 Jan 2013;Build 153
+ ;Copyright 1995-2013,Document Storage Systems Inc. All Rights Reserved
+ ;;Copyright 1995-2010,Document Storage Systems Inc.,All Rights Reserved
+ ;
+ Q
+ ;
+EN ;[Option]
+ N DIR,VFDEDT,VFDLIM,VFDOPT,VFDPATH,VFRR,VFDSDT,X,Y
+ W !,"Please select date range for study...",!
+ Q:$$DATE^VFDCFM(.VFDSDT,.VFDEDT,1)<1
+ W !,"Please select data to export...",!
+ S DIR(0)="S^D:DEMOGRAPHIC;0:MOVEMENT;1:V POV;2:PROBLEM"
+ S DIR("A")="Select export" D ^DIR Q:$D(DIRUT)
+ S VFDOPT=Y
+ W !,"Please select a directory (path) for export file(s)...",!
+ S DIR(0)="F^1:245",DIR("A")="Path",DIR("B")=$$DEFDIR^%ZISH("")
+ D ^DIR Q:$D(DIRUT)  S VFDPATH=Y
+ ;
+ S VFDRR=$NA(^TMP("VFDRPARQ",$J)) K @VFDRR
+ S VFDLIM="^" ;Changed from "," 5/17/2011 per J.D.
+ I $T(@VFDOPT)]"" D @VFDOPT
+ Q
+ ;
+ ; 
+ ;  INPUT:
+ ;
+ ;     VFDSDT - Start date for Extract
+ ;     VFDEDT - End Date for Extract
+ ;     VFDPATH- Pathname for file
+ ;
+ ;  OUTPUT:
+ ;
+ ;  VFDRR(0) = Header record
+ ;  VFDRR(1-n) = ICD9 CODE ^ PATIENT IEN ^ VISIT DATE/TIME ^ PROVIDER NARRATIVE ^ PRIME_SECONDARY ^
+ ;               ORDERING/RESULTING ^ AUDIT TRAIL ^ PROVIDER NARRATIVE CATEGORY
+ ;
+EN1(VFDRR,VFDSDT,VFDEDT,VFDFILE,VFDPATH)  ; [RPC:  VFD ARRA POV EXTRACT]
+ N VFDLIM
+ S VFDRR=$NA(^TMP("VFDRPARQ",$J)) K @VFDRR
+ I $G(VFDFILE)="" S VFDFILE="PT_VPOV"
+ I $G(VFDPATH)="" S VFDPATH=$$DEFDIR^%ZISH("")
+ S VFDLIM="^" ;Changed from "," 5/17/2011 per J.D.
+ D @1
+ Q
+ ;
+0 ;PATIENT MOVEMENT - 405
+ ; Date range applies to File 405, field #.01 MOVEMENT DATE/TIME
+ ;
+ ; This export includes only movements during the date range,
+ ; not movements belonging to the same inpatient episode that
+ ; precede or follow the specified range.  However, the data
+ ; may reference a corresponding admission movement from an
+ ; earlier date/time or a discharge that is after the end of
+ ; the specified range.
+ ;
+ N VFDA,VFDHDR,VFDFLST,VFDT,VFDPMDA
+ S VFDFLST=".01;.02;.03;.06;.14;.17;21600.01" ;Field list to export
+ S VFDHDR=$$HDR(405,VFDFLST)
+ S $P(VFDHDR,VFDLIM,3)="Patient IEN"
+ S @VFDRR@(0)=VFDHDR ;Record '0' is header
+ S VFDT=VFDSDT-.0000001 F  S VFDT=$O(^DGPM("B",VFDT)) Q:'VFDT!(VFDT>VFDEDT)  D
+ .S VFDPMDA=0  F  S VFDPMDA=$O(^DGPM("B",VFDT,VFDPMDA)) Q:'VFDPMDA  D
+ ..D DGPM(VFDPMDA)
+ ..Q
+ .Q
+ D GTF("DGPM-"_$TR($$NOW^XLFDT,".","p"))
+ Q
+DGPM(VFDA) ;Add one patient movement record
+ N VFDARRAY,VFDPMDT,VFDX
+ D GETS^DIQ(405,VFDA,VFDFLST,"IE",$NA(VFDARRAY))
+ S VFDARRAY=$NA(VFDARRAY(405,VFDA_","))
+ S VFDX=$$FDT($G(@VFDARRAY@(.01,"I")),"D")_VFDLIM ;MOVEMENT DATE/TIME
+ S VFDX=VFDX_$G(@VFDARRAY@(.02,"E"))_VFDLIM ;TRANSACTION
+ S VFDX=VFDX_$G(@VFDARRAY@(.03,"I"))_VFDLIM ;DFN
+ S VFDX=VFDX_$G(@VFDARRAY@(.06,"E"))_VFDLIM ;WARD LOCATION
+ S VFDPMDT=$$GET1^DIQ(405,$G(@VFDARRAY@(.14,"I")),.01,"I")
+ S VFDX=VFDX_$$FDT(VFDPMDT,"D")_VFDLIM ;ADMISSION DATE/TIME
+ S VFDPMDT=$$GET1^DIQ(405,$G(@VFDARRAY@(.17,"I")),.01,"I")
+ S VFDX=VFDX_$$FDT(VFDPMDT,"D")_VFDLIM ;DISCHARGE DATE/TIME
+ S VFDX=VFDX_$G(@VFDARRAY@(21600.01,"E")) ;DIAGNOSIS [ICD]
+ S @VFDRR@($O(@VFDRR@(" "),-1)+1)=VFDX
+ Q
+1 ;V POV - 9000010.07
+ ; Date range applies to VISIT
+ N VFDA,VFDHDR,VFDFLST,VFDT,VFDVDA
+ S VFDFLST=".01;.02;.03;.04;.12;.17;80102;80201" ;Field list to export
+ S VFDHDR=$$HDR(9000010.07,VFDFLST)
+ S $P(VFDHDR,VFDLIM,1)="ICD9_CODE" ;Field name changed per J.D. Email 5/16/2011
+ S $P(VFDHDR,VFDLIM,2)="PT_IEN" ;Field name changed per J.D. Email 5/16/2011
+ S $P(VFDHDR,VFDLIM,3)="VISIT_DT" ;Field name changed per J.D. Email 5/16/2011
+ S $P(VFDHDR,VFDLIM,5)="PRIME_SECONDARY" ;Field name changed per J.D. 5/17/2011
+ S @VFDRR@(0)=VFDHDR ;Record '0' is header
+ S VFDT=VFDSDT-.0000001 F  S VFDT=$O(^AUPNVSIT("B",VFDT)) Q:'VFDT!(VFDT>VFDEDT)  D
+ .S VFDVDA=0  F  S VFDVDA=$O(^AUPNVSIT("B",VFDT,VFDVDA)) Q:'VFDVDA  D
+ ..Q:'$D(^AUPNVPOV("AD",VFDVDA))  ;VISIT not pointed-to by V POV
+ ..S VFDA=0 F  S VFDA=$O(^AUPNVPOV("AD",VFDVDA,VFDA)) Q:'VFDA  D VPOV(VFDA)
+ ..Q
+ .Q
+ ;D GTF("VPOV-"_$TR($$NOW^XLFDT,".","p"))
+ D GTF("PT_VPOV",VFDPATH) ;File name changed per J.D. Email 5/16/2011
+ Q
+VPOV(VFDA) ;Add one V POV record
+ N VFDARRAY,VFDIENS,VFDN,VFDVIEN,VFDVDT,VFDX
+ D GETS^DIQ(9000010.07,VFDA,VFDFLST,"IE",$NA(VFDARRAY))
+ S VFDARRAY=$NA(VFDARRAY(9000010.07,VFDA_","))
+ S VFDX=$G(@VFDARRAY@(.01,"E"))_VFDLIM ;POV
+ S VFDX=VFDX_$G(@VFDARRAY@(.02,"I"))_VFDLIM ;DFN
+ S VFDVIEN=$G(@VFDARRAY@(.03,"I")),VFDVDT=$$GET1^DIQ(9000010,VFDVIEN,.01,"I")
+ S VFDX=VFDX_$$FDT(VFDVDT,"D")_VFDLIM ;VISIT DATE/TIME
+ S VFDX=VFDX_$TR($G(@VFDARRAY@(.04,"E")),VFDLIM,"~")_VFDLIM ;PROVIDER NARRATIVE
+ S VFDX=VFDX_$G(@VFDARRAY@(.12,"E"))_VFDLIM ;PRIMARY/SECONDARY
+ S VFDX=VFDX_$G(@VFDARRAY@(.17,"E"))_VFDLIM ;ORDERING/RESULTING
+ S VFDX=VFDX_$G(@VFDARRAY@(80102,"E"))_VFDLIM ;AUDIT TRAIL
+ S VFDX=VFDX_$G(@VFDARRAY@(80201,"E")) ;PROVIDER NARRATIVE CATEGORY
+ S @VFDRR@($O(@VFDRR@(" "),-1)+1)=VFDX
+ Q
+2 ;PROBLEM - 9000011
+ ; Date range applies to VISIT -> V POV -> PROBLEM
+ N VFD11,VFDA,VFDHDR,VFDFLST,VFDT,VFDVDA
+ S VFDFLST=".01;.02;.03;.04;.05;.07;.08;.12;.13;1.01;1.02;"
+ S VFDFLST=VFDFLST_"1.04;1.05;1.09;1.14;21600.01;21600.02" ;Field list to export
+ S VFDHDR=$$HDR(9000011,VFDFLST)
+ S $P(VFDHDR,VFDLIM,2)="Patient IEN"
+ S @VFDRR@(0)=VFDHDR ;Record '0' is header
+ S VFDT=VFDSDT-.0000001 F  S VFDT=$O(^AUPNVSIT("B",VFDT)) Q:'VFDT!(VFDT>VFDEDT)  D
+ .S VFDVDA=0  F  S VFDVDA=$O(^AUPNVSIT("B",VFDT,VFDVDA)) Q:'VFDVDA  D
+ ..Q:'$D(^AUPNVPOV("AD",VFDVDA))  ;VISIT not pointed-to by V POV
+ ..S VFDA=0 F  S VFDA=$O(^AUPNVPOV("AD",VFDVDA,VFDA)) Q:'VFDA  D
+ ...S VFD11=$$GET1^DIQ(9000010.07,VFDA,.16,"I") Q:'VFD11
+ ...D PROBLEM(VFD11)
+ ...Q
+ ..Q
+ .Q
+ D GTF("PROBLEM-"_$TR($$NOW^XLFDT,".","p"))
+ Q
+PROBLEM(VFDA) ;Add one problem record
+ N VFDARRAY,VFDIENS,VFDN,VFDVIEN,VFDVDT,VFDX
+ D GETS^DIQ(9000011,VFDA,VFDFLST,"IE",$NA(VFDARRAY))
+ S VFDARRAY=$NA(VFDARRAY(9000011,VFDA_","))
+ S VFDX=$G(@VFDARRAY@(.01,"E"))_VFDLIM ;DIAGNOSIS
+ S VFDX=VFDX_$G(@VFDARRAY@(.02,"I"))_VFDLIM ;DFN
+ S VFDX=VFDX_$$FDT($G(@VFDARRAY@(.03,"I")),"D")_VFDLIM ;DATE LAST MODIFIED
+ S VFDX=VFDX_$G(@VFDARRAY@(.04,"E"))_VFDLIM ;CLASS
+ S VFDX=VFDX_$TR($G(@VFDARRAY@(.05,"E")),VFDLIM,"~")_VFDLIM ;PROVIDER NARRATIVE
+ S VFDX=VFDX_$G(@VFDARRAY@(.07,"E"))_VFDLIM ;NMBR
+ S VFDX=VFDX_$$FDT($G(@VFDARRAY@(.08,"I")),"D")_VFDLIM ;DATE ENTERED
+ S VFDX=VFDX_$G(@VFDARRAY@(.12,"E"))_VFDLIM ;STATUS
+ S VFDX=VFDX_$$FDT($G(@VFDARRAY@(.13,"I")),"D")_VFDLIM ;DATE OF ONSET
+ S VFDX=VFDX_$G(@VFDARRAY@(1.01,"E"))_VFDLIM ;PROBLEM
+ S VFDX=VFDX_$G(@VFDARRAY@(1.02,"E"))_VFDLIM ;CONDITION
+ S VFDX=VFDX_$G(@VFDARRAY@(1.04,"I"))_VFDLIM ;RECORDING PROVIDER (DUZ)
+ S VFDX=VFDX_$G(@VFDARRAY@(1.05,"I"))_VFDLIM ;RESPONSIBLE PROVIDER (DUZ)
+ S VFDX=VFDX_$$FDT($G(@VFDARRAY@(1.09,"I")),"D")_VFDLIM ;DATE RECORDED
+ S VFDX=VFDX_$G(@VFDARRAY@(1.14,"E"))_VFDLIM ;PRIORITY
+ S VFDX=VFDX_$G(@VFDARRAY@(21600.01,"E"))_VFDLIM ;PROBLEM CATEGORY
+ S VFDX=VFDX_$G(@VFDARRAY@(21600.02,"E")) ;RESOLVED
+ S @VFDRR@($O(@VFDRR@(" "),-1)+1)=VFDX
+ Q
+D ;PATIENT demographics (File 2)
+ ; Date range applies to VISIT ->  PATIENT NAME
+ N VFDA,VFDDFN,VFDHDR,VFDFLST,VFDT,VFDVDT
+ S VFDFLST=".01;.02;.03;.05" ;Field list to export
+ S VFDHDR=$$HDR(2,VFDFLST)
+ S $P(VFDHDR,VFDLIM)="Patient IEN"
+ S @VFDRR@(0)=VFDHDR ;Record '0' is header
+ ;
+ N VFDPLST S VFDPLST=$NA(^TMP("VFDPLST",$J)) K @VFDPLST ;Unique patients list
+ S VFDT=VFDSDT-.0000001 F  S VFDT=$O(^AUPNVSIT("B",VFDT)) Q:'VFDT!(VFDT>VFDEDT)  D
+ .S VFDVDA=0  F  S VFDVDA=$O(^AUPNVSIT("B",VFDT,VFDVDA)) Q:'VFDVDA  D
+ ..S VFDDFN=$$GET1^DIQ(9000010,VFDVDA,.05,"I") Q:'(VFDDFN>0)
+ ..S @VFDPLST@(VFDDFN)=""
+ ..Q
+ .Q
+ S VFDDFN=0 F  S VFDDFN=$O(@VFDPLST@(VFDDFN)) Q:'VFDDFN  D DPT(VFDDFN)
+ K @VFDPLST D GTF("DPT-"_$TR($$NOW^XLFDT,".","p"))
+ Q
+DPT(VFDA) ;Add one patient demographic record
+ N VFDARRAY,VFDIENS,VFDN,VFDX
+ D GETS^DIQ(2,VFDA,VFDFLST,"IE",$NA(VFDARRAY))
+ S VFDARRAY=$NA(VFDARRAY(2,VFDA_","))
+ S VFDX=VFDA_VFDLIM ;DFN
+ S VFDX=VFDX_$G(@VFDARRAY@(.02,"E"))_VFDLIM ;SEX
+ S VFDX=VFDX_$$FDT($G(@VFDARRAY@(.03,"I")),"D")_VFDLIM ;DATE OF BIRTH
+ S VFDX=VFDX_$G(@VFDARRAY@(.05,"E")) ;MARITAL STATUS
+ S @VFDRR@($O(@VFDRR@(" "),-1)+1)=VFDX
+ Q
+HDR(VFDD,VFDFLST) ;Header record consisting of delimited field names
+ N VFDI,VFDX
+ S VFDX=""
+ ; 5/17/2011 - Per J.D. translate <space> and "/" to underscore in header
+ ;F VFDI=1:1:$L(VFDFLST,";") S VFDX=VFDX_$$GET1^DID(VFDD,$P(VFDFLST,";",VFDI),,"LABEL")_VFDLIM
+ F VFDI=1:1:$L(VFDFLST,";") D
+ .S VFDX=VFDX_$TR($$GET1^DID(VFDD,$P(VFDFLST,";",VFDI),,"LABEL")," /","__")
+ .S VFDX=VFDX_VFDLIM
+ .Q
+ ; End 5/17/2011 modification
+ Q $E(VFDX,1,$L(VFDX)-1)
+ ;
+FDT(VFDFMDT,VFDFLAG) ;Format Fileman date/time (wraps $$FMTE^XLFDT)
+ ; VFDFMDT=[Required] Fileman date/time (internal format)
+ ; VFDFLAG=[Optional] Format control.  If defined and not null, same as $$FMTE^XLFDT
+ ;                                     =OR= "D" for Delphi Float
+ ;                                     Return internal format
+ Q:'$L($G(VFDFLAG)) $G(VFDFMDT)
+ I VFDFLAG="D" Q $$CNVT^VFDCDT(,$G(VFDFMDT),"F","D",,,1)
+ Q $$FMTE^XLFDT($G(VFDFMDT),VFDFLAG)
+ ;
+GTF(VFDFNAM,VFDPATH) ;Wrap copy global-to-file and delete source data if successful
+ ; Assumes variables VFDPATH and VFDLIM (delimiter) are defined
+ ;
+ N X S X=$$GTF^%ZISH($NA(@VFDRR@(0)),3,VFDPATH,VFDFNAM_".csv")
+ Q
